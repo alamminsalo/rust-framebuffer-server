@@ -1,0 +1,34 @@
+<html>
+	<head>
+	<script>
+	function start() {
+
+		//Setup img
+		var img = [];
+		for (var i = 0; i < 96; i++) {
+			img.push(document.createElement("img"));
+			img[i].style.display="block";
+			document.body.appendChild(img[i]);
+		}
+
+		var socket = new WebSocket("ws://127.0.0.1:2794", "rust-websocket");
+		socket.onmessage = function (event) {
+			var data = event.data.split("|");
+			var nums = data[0].split(",");
+			var num = nums[1] / nums[3];
+			img[num].src = "data:image/png;base64," + data[1];
+
+			//Scanning effect
+			img[num+1].src = "";
+
+			data = undefined;
+			nums = undefined;
+			num = undefined;
+		};
+	}
+
+	</script>
+	</head>
+	<body onload="start()"></body>
+</html>
+
