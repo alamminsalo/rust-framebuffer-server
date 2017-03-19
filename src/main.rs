@@ -1,10 +1,11 @@
 use std::process::Command;
+use std::sync::Arc;
 
 fn grab_img(x: u32, y: u32, w: u32, h: u32) -> String {
 
     let output = Command::new("sh")
         .arg("-c")
-        .arg(format!("maim -m 10 -g{}x{}+{}+{} | base64 -i", w, h, x, y))
+        .arg(format!("maim -m 10 -g{}x{}+{}+{} -f jpg | base64 -i ", w, h, x, y))
         .output()
         .expect("Failed");
 
@@ -22,10 +23,13 @@ use websocket::header::WebSocketProtocol;
 fn main() {
     let server = Server::bind("127.0.0.1:2794").unwrap();
 
-    let height = 768;
-    let width: u32 = 768;
-    let lh: u32 = 8;
-    let lines = height / lh;
+    /// Thread count, set to 1 for no thread spawning
+    let thread_count = 4;
+
+    let height: u32 = 1080;
+    let width: u32 = 1920;
+    let lh: u32 = height / thread_count;
+    let lines: u32 = height / lh;
 
     for connection in server {
         // Spawn a new thread for each connection.
@@ -35,6 +39,7 @@ fn main() {
 
             request.validate().unwrap(); // Validate the request
 
+            println!("Client connected!");
 
             let mut response = request.accept(); // Form a response
 
@@ -48,10 +53,24 @@ fn main() {
             let mut client = response.send().unwrap(); // Send the response
 
             loop {
-                for y in 0..lines {
-                    let msg = grab_img(0,y*lh,width,lh);
-                    let message: Message = Message::text(msg);
-                    client.send_message(&message).unwrap();
+                let mut threads = vec![];
+
+                if lines == 1 {
+                    let msg = Message::text(grab_img(0,0,width,height));
+                    client.send_message(&msg).unwrap();
+                }
+
+                else { // Do work in threads
+                    for y in 0..lines {
+                        threads.push(thread::spawn(move || {
+                            Message::text(grab_img(0,y*lh,width,lh))
+                        }));
+                    }
+
+                    for t in threads {
+                        let msg = t.join().unwrap();
+                        client.send_message(&msg).unwrap();
+                    }
                 }
             }
         });
